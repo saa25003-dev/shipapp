@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>農産物出荷・販売記録アプリ (shipapp)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; }
+        .tab-active { border-bottom: 3px solid #16a34a; color: #16a34a; font-weight: 700; }
+    </style>
+</head>
+<body class="bg-emerald-50/50 min-h-screen text-slate-800 antialiased flex flex-col">
+
+    <!-- トースト通知 -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ヘッダー -->
+    <header class="bg-emerald-700 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-wheat-awn text-xl text-amber-300"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight sm:text-xl">収穫・出荷記録 shipapp</h1>
+                    <p class="text-xs text-emerald-200 hidden sm:block">実習農産物 出荷管理システム</p>
+                </div>
+            </div>
+
+            <!-- ユーザープロフィール & ログアウト (ログイン時のみ表示) -->
+            <div id="user-profile" class="hidden flex items-center gap-3">
+                <div class="flex items-center gap-2 bg-emerald-800/60 py-1.5 px-3 rounded-full border border-emerald-600/50">
+                    <img id="user-avatar" src="" alt="User" class="w-7 h-7 rounded-full border border-white/50 object-cover">
+                    <span id="user-name" class="text-sm font-medium hidden md:inline max-w-[120px] truncate"></span>
+                </div>
+                <button id="btn-logout" class="bg-emerald-800 hover:bg-emerald-900 text-white text-xs sm:text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-600/40">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>ログアウト</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツエリア -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- 1. 未ログイン画面 (Googleログイン必須ガード) -->
+        <div id="auth-section" class="max-w-md mx-auto my-12 bg-white p-8 rounded-2xl shadow-xl border border-emerald-100 text-center">
+            <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl shadow-inner">
+                <i class="fa-solid fa-[#008000] fa-seedling"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">実習出荷記録システム</h2>
+            <p class="text-slate-600 text-sm mb-6 leading-relaxed">
+                収穫した農産物の出荷記録・集計を行うには<br>Googleアカウントでログインしてください。
+            </p>
+
+            <button id="btn-google-login" class="w-full bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 border border-slate-300 rounded-xl shadow-sm flex items-center justify-center gap-3 transition-all transform active:scale-[0.98]">
+                <svg class="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span>Googleでログイン</span>
+            </button>
+
+            <!-- 注意メッセージ -->
+            <div id="auth-error" class="hidden mt-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg text-left border border-red-200">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i>
+                <span id="auth-error-msg">ログイン中にエラーが発生しました。</span>
+            </div>
+
+            <p class="mt-6 text-xs text-slate-400">
+                ※Firebase Authentication (Google Provider) を使用しています。
+            </p>
+        </div>
+
+        <!-- 2. ログイン後画面 (メインダッシュボード) -->
+        <div id="app-dashboard" class="hidden space-y-6">
+
+            <!-- タブ切り替えナビゲーション -->
+            <div class="flex border-b border-emerald-200 bg-white rounded-t-xl px-4 pt-2 shadow-sm">
+                <button id="tab-btn-record" class="tab-btn tab-active px-5 py-3 text-sm flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>出荷データ登録・一覧</span>
+                </button>
+                <button id="tab-btn-analytics" class="tab-btn px-5 py-3 text-sm text-slate-500 font-medium hover:text-emerald-600 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>集計・推移グラフ</span>
+                </button>
+            </div>
+
+            <!-- タブ1: 出荷データ登録 & 一覧画面 -->
+            <div id="tab-content-record" class="space-y-6">
+                
+                <!-- 登録/編集フォームカード -->
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-emerald-100">
+                    <div class="flex items-center justify-between mb-4 border-b pb-3 border-slate-100">
+                        <h2 id="form-title" class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-plus text-emerald-600"></i>
+                            <span>新規出荷データの登録</span>
+                        </h2>
+                        <button id="btn-cancel-edit" class="hidden text-xs text-slate-500 hover:text-slate-800 underline">
+                            キャンセル (新規作成に戻る)
+                        </button>
+                    </div>
+
+                    <form id="shipment-form" novalidate class="space-y-4">
+                        <input type="hidden" id="edit-doc-id" value="">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            
+                            <!-- 項目1: 農産物名 -->
+                            <div>
+                                <label for="crop-name" class="block text-xs font-bold text-slate-700 mb-1">
+                                    農産物名 <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="text" id="crop-name" list="crop-list" placeholder="例: トマト、ナス、米" required
+                                        class="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <datalist id="crop-list">
+                                        <option value="トマト"></option>
+                                        <option value="ミニトマト"></option>
+                                        <option value="キュウリ"></option>
+                                        <option value="ナス"></option>
+                                        <option value="イチゴ"></option>
+                                        <option value="キャベツ"></option>
+                                        <option value="ダイコン"></option>
+                                        <option value="ネギ"></option>
+                                        <option value="米（コシヒカリ）"></option>
+                                        <option value="ミカン"></option>
+                                    </datalist>
+                                </div>
+                                <p id="err-crop-name" class="hidden text-[11px] text-red-500 mt-1">農産物名を入力してください。</p>
+                            </div>
+
+                            <!-- 項目2: 出荷日 -->
+                            <div>
+                                <label for="ship-date" class="block text-xs font-bold text-slate-700 mb-1">
+                                    出荷日 <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" id="ship-date" required
+                                    class="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <p id="err-ship-date" class="hidden text-[11px] text-red-500 mt-1">有効な出荷日を選択してください。</p>
+                            </div>
+
+                            <!-- 項目3: 出荷数量 & 単位 -->
+                            <div>
+                                <label for="quantity" class="block text-xs font-bold text-slate-700 mb-1">
+                                    出荷数量 <span class="text-red-500">*</span>
+                                </label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="quantity" step="0.1" min="0.1" placeholder="例: 15.5" required
+                                        class="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <select id="unit" class="text-sm px-2 py-2 rounded-lg border border-slate-300 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                        <option value="kg">kg</option>
+                                        <option value="個">個</option>
+                                        <option value="袋">袋</option>
+                                        <option value="箱">箱</option>
+                                        <option value="束">束</option>
+                                    </select>
+                                </div>
+                                <p id="err-quantity" class="hidden text-[11px] text-red-500 mt-1">正の数値を入力してください。</p>
+                            </div>
+
+                            <!-- 項目4: 出荷先 -->
+                            <div>
+                                <label for="destination" class="block text-xs font-bold text-slate-700 mb-1">
+                                    出荷先 <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="destination" list="dest-list" placeholder="例: 直売所、学校祭" required
+                                    class="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <datalist id="dest-list">
+                                    <option value="直売所"></option>
+                                    <option value="学校祭"></option>
+                                    <option value="給食センター"></option>
+                                    <option value="JA農協"></option>
+                                    <option value="スーパー"></option>
+                                    <option value="校内販売"></option>
+                                </datalist>
+                                <p id="err-destination" class="hidden text-[11px] text-red-500 mt-1">出荷先を入力または選択してください。</p>
+                            </div>
+
+                        </div>
+
+                        <!-- 項目5: メモ -->
+                        <div>
+                            <label for="memo" class="block text-xs font-bold text-slate-700 mb-1">メモ (特記事項・等級・品質など)</label>
+                            <textarea id="memo" rows="2" placeholder="例: A品。糖度高く仕上がりが良い。生食用。"
+                                class="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"></textarea>
+                        </div>
+
+                        <div class="flex justify-end pt-2">
+                            <button type="submit" id="btn-submit" class="w-full sm:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span id="btn-submit-text">登録する</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 登録データ一覧カード -->
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-emerald-100 space-y-4">
+                    
+                    <!-- 検索・フィルター・並び替え コントロールバー -->
+                    <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                        <!-- 検索窓 -->
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="search-keyword" placeholder="農産物名・出荷先・メモで検索..."
+                                class="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <!-- 農産物絞り込み -->
+                            <select id="filter-crop" class="text-xs sm:text-sm px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="">すべての農産物</option>
+                            </select>
+
+                            <!-- 出荷先絞り込み -->
+                            <select id="filter-dest" class="text-xs sm:text-sm px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="">すべての出荷先</option>
+                            </select>
+
+                            <!-- ソート選択 -->
+                            <select id="sort-order" class="text-xs sm:text-sm px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                                <option value="date-desc">出荷日: 新しい順</option>
+                                <option value="date-asc">出荷日: 古い順</option>
+                                <option value="qty-desc">数量: 多い順</option>
+                                <option value="qty-asc">数量: 少ない順</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 件数バッジ & クリア -->
+                    <div class="flex justify-between items-center text-xs text-slate-500 px-1">
+                        <div>
+                            全 <span id="total-count" class="font-bold text-emerald-700">0</span> 件表示中
+                        </div>
+                        <button id="btn-reset-filter" class="text-emerald-600 hover:underline hidden">
+                            <i class="fa-solid fa-arrows-rotate mr-1"></i>フィルター解除
+                        </button>
+                    </div>
+
+                    <!-- テーブル（PC表示） & カード（スマホ表示） -->
+                    <div class="overflow-hidden rounded-xl border border-slate-200">
+                        
+                        <!-- レスポンシブテーブル (タブレット・PC) -->
+                        <div class="hidden sm:block overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-700">
+                                <thead class="bg-emerald-50/80 text-emerald-900 font-bold border-b border-emerald-100 text-xs">
+                                    <tr>
+                                        <th class="py-3 px-4">出荷日</th>
+                                        <th class="py-3 px-4">農産物名</th>
+                                        <th class="py-3 px-4 text-right">出荷数量</th>
+                                        <th class="py-3 px-4">出荷先</th>
+                                        <th class="py-3 px-4">メモ</th>
+                                        <th class="py-3 px-4 text-center w-24">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JSで挿入 -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- スマホ用カードリスト -->
+                        <div id="mobile-card-list" class="sm:hidden divide-y divide-slate-100 bg-white">
+                            <!-- JSで挿入 -->
+                        </div>
+
+                        <!-- データなしメッセージ -->
+                        <div id="empty-state" class="hidden py-12 text-center text-slate-400 bg-slate-50/50">
+                            <i class="fa-regular fa-folder-open text-4xl mb-3 text-slate-300"></i>
+                            <p class="text-sm">該当する出荷記録が見つかりません。</p>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- タブ2: 集計 & グラフ画面 -->
+            <div id="tab-content-analytics" class="hidden space-y-6">
+                
+                <!-- サマリーカードグループ -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center gap-4">
+                        <div class="p-3 bg-emerald-100 text-emerald-600 rounded-xl text-xl">
+                            <i class="fa-solid fa-boxes-packing"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">総出荷回数</p>
+                            <p id="summary-total-records" class="text-2xl font-bold text-slate-800">0 回</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center gap-4">
+                        <div class="p-3 bg-amber-100 text-amber-600 rounded-xl text-xl">
+                            <i class="fa-solid fa-scale-balanced"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">kg表記アイテム合計</p>
+                            <p id="summary-total-kg" class="text-2xl font-bold text-slate-800">0.0 kg</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex items-center gap-4">
+                        <div class="p-3 bg-blue-100 text-blue-600 rounded-xl text-xl">
+                            <i class="fa-solid fa-list-check"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">出荷農産物種類</p>
+                            <p id="summary-crop-types" class="text-2xl font-bold text-slate-800">0 品目</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- グラフ & 農産物別合計表 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <!-- 出荷数量推移グラフ -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100 flex flex-col justify-between">
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                            出荷数量の推移 (日別)
+                        </h3>
+                        <div class="relative w-full h-64">
+                            <canvas id="chart-trend"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 農産物別集計テーブル -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100">
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-emerald-600"></i>
+                            農産物ごとの出荷合計集計
+                        </h3>
+                        <div class="overflow-y-auto max-h-64 border rounded-xl border-slate-100">
+                            <table class="w-full text-left text-xs sm:text-sm">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold sticky top-0 border-b">
+                                    <tr>
+                                        <th class="p-2.5">農産物名</th>
+                                        <th class="p-2.5 text-right">合計数量</th>
+                                        <th class="p-2.5 text-right">出荷回数</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="aggregate-table-body" class="divide-y divide-slate-100">
+                                    <!-- JS挿入 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-100 border-t border-slate-200 mt-auto py-4 text-center text-xs text-slate-500">
+        <p>&copy; 2026 shipapp - 実習農産物出荷記録アプリ</p>
+    </footer>
+
+    <!-- Firebase App & Firestore JS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signOut, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            updateDoc, 
+            deleteDoc, 
+            doc, 
+            onSnapshot, 
+            query, 
+            orderBy, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================
+        // 1. Firebase 設定（指定された設定情報を使用）
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyCWigcaWuKzVwBHd1J_KJPyru2n0zgSufg",
+            authDomain: "syukka-1249e.firebaseapp.com",
+            projectId: "syukka-1249e",
+            storageBucket: "syukka-1249e.firebasestorage.app",
+            messagingSenderId: "252323733314",
+            appId: "1:252323733314:web:4d83430408cc26bbbe32db",
+            measurementId: "G-TE634JWSGP"
+        };
+
+        // Firebase 初期化
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        // アプリケーション状態変数
+        let currentUser = null;
+        let unsubscribeSnapshots = null;
+        let allShipments = []; // raw Firestore data
+        let chartInstance = null;
+
+        // 今日の日付をデフォルト設定 (YYYY-MM-DD)
+        document.getElementById('ship-date').value = new Date().toISOString().split('T')[0];
+
+        // ==========================================
+        // 2. DOM要素参照
+        // ==========================================
+        const authSection = document.getElementById('auth-section');
+        const appDashboard = document.getElementById('app-dashboard');
+        const userProfile = document.getElementById('user-profile');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        const btnGoogleLogin = document.getElementById('btn-google-login');
+        const btnLogout = document.getElementById('btn-logout');
+        const authError = document.getElementById('auth-error');
+        const authErrorMsg = document.getElementById('auth-error-msg');
+
+        const shipmentForm = document.getElementById('shipment-form');
+        const formTitle = document.getElementById('form-title');
+        const editDocIdInput = document.getElementById('edit-doc-id');
+        const btnSubmitText = document.getElementById('btn-submit-text');
+        const btnCancelEdit = document.getElementById('btn-cancel-edit');
+
+        const searchKeyword = document.getElementById('search-keyword');
+        const filterCrop = document.getElementById('filter-crop');
+        const filterDest = document.getElementById('filter-dest');
+        const sortOrder = document.getElementById('sort-order');
+        const btnResetFilter = document.getElementById('btn-reset-filter');
+        const totalCountSpan = document.getElementById('total-count');
+
+        const tableBody = document.getElementById('table-body');
+        const mobileCardList = document.getElementById('mobile-card-list');
+        const emptyState = document.getElementById('empty-state');
+
+        // タブ制御
+        const tabBtnRecord = document.getElementById('tab-btn-record');
+        const tabBtnAnalytics = document.getElementById('tab-btn-analytics');
+        const tabContentRecord = document.getElementById('tab-content-record');
+        const tabContentAnalytics = document.getElementById('tab-content-analytics');
+
+        // ==========================================
+        // 3. 認証 (Google Auth) イベントハンドラ
+        // ==========================================
+
+        // Google ログイン
+        btnGoogleLogin.addEventListener('click', async () => {
+            authError.classList.add('hidden');
+            try {
+                await signInWithPopup(auth, provider);
+                showToast('Googleアカウントでログインしました', 'success');
+            } catch (error) {
+                console.error("Login Error:", error);
+                authErrorMsg.textContent = `ログインに失敗しました (${error.code || error.message})。FirebaseコンソールでGoogle認証とドメインが許可されているか確認してください。`;
+                authError.classList.remove('hidden');
+            }
+        });
+
+        // ログアウト
+        btnLogout.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showToast('ログアウトしました', 'info');
+            } catch (error) {
+                console.error("Logout Error:", error);
+            }
+        });
+
+        // Auth 状態監視
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // ログイン時
+                currentUser = user;
+                userAvatar.src = user.photoURL || 'https://placehold.co/100x100/16a34a/ffffff?text=U';
+                userName.textContent = user.displayName || user.email || 'ユーザー';
+                
+                authSection.classList.add('hidden');
+                appDashboard.classList.remove('hidden');
+                userProfile.classList.remove('hidden');
+
+                // Firestore データ同期開始
+                subscribeToShipments();
+            } else {
+                // ログアウト時
+                currentUser = null;
+                if (unsubscribeSnapshots) unsubscribeSnapshots();
+                
+                appDashboard.classList.add('hidden');
+                userProfile.classList.add('hidden');
+                authSection.classList.remove('hidden');
+                allShipments = [];
+            }
+        });
+
+        // ==========================================
+        // 4. Firestore リアルタイムデータ取得
+        // ==========================================
+        function subscribeToShipments() {
+            if (!currentUser) return;
+
+            // コレクション参照: 公開データ構造 Rule 1 準拠
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'shipapp-default';
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'shipments');
+
+            // リアルタイム購読
+            unsubscribeSnapshots = onSnapshot(colRef, (snapshot) => {
+                allShipments = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                updateFilterOptions();
+                renderData();
+                renderAnalytics();
+            }, (error) => {
+                console.error("Firestore Subscribe Error:", error);
+                showToast('データの取得に失敗しました', 'error');
+            });
+        }
+
+        // ==========================================
+        // 5. バリデーション & データ保存 (追加・更新)
+        // ==========================================
+        shipmentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            // 入力値
+            const cropName = document.getElementById('crop-name').value.trim();
+            const shipDate = document.getElementById('ship-date').value;
+            const quantityVal = parseFloat(document.getElementById('quantity').value);
+            const unit = document.getElementById('unit').value;
+            const destination = document.getElementById('destination').value.trim();
+            const memo = document.getElementById('memo').value.trim();
+            const editId = editDocIdInput.value;
+
+            // バリデーションチェック
+            let isValid = true;
+            
+            if (!cropName) {
+                document.getElementById('err-crop-name').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('err-crop-name').classList.add('hidden');
+            }
+
+            if (!shipDate) {
+                document.getElementById('err-ship-date').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('err-ship-date').classList.add('hidden');
+            }
+
+            if (isNaN(quantityVal) || quantityVal <= 0) {
+                document.getElementById('err-quantity').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('err-quantity').classList.add('hidden');
+            }
+
+            if (!destination) {
+                document.getElementById('err-destination').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('err-destination').classList.add('hidden');
+            }
+
+            if (!isValid) return;
+
+            // 送信データオブジェクト
+            const recordData = {
+                cropName,
+                shipDate,
+                quantity: quantityVal,
+                unit,
+                destination,
+                memo,
+                updatedAt: serverTimestamp(),
+                userId: currentUser.uid,
+                userName: currentUser.displayName || '無名'
+            };
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'shipapp-default';
+
+            try {
+                if (editId) {
+                    // 更新 (UPDATE)
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shipments', editId);
+                    await updateDoc(docRef, recordData);
+                    showToast('出荷記録を更新しました', 'success');
+                } else {
+                    // 新規追加 (CREATE)
+                    recordData.createdAt = serverTimestamp();
+                    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'shipments');
+                    await addDoc(colRef, recordData);
+                    showToast('新しい出荷記録を保存しました', 'success');
+                }
+
+                resetForm();
+            } catch (error) {
+                console.error("Save Error:", error);
+                showToast('保存中にエラーが発生しました', 'error');
+            }
+        });
+
+        // フォームリセット
+        function resetForm() {
+            shipmentForm.reset();
+            document.getElementById('ship-date').value = new Date().toISOString().split('T')[0];
+            editDocIdInput.value = '';
+            formTitle.innerHTML = '<i class="fa-solid fa-circle-plus text-emerald-600"></i><span>新規出荷データの登録</span>';
+            btnSubmitText.textContent = '登録する';
+            btnCancelEdit.classList.add('hidden');
+
+            // エラー表示クリア
+            ['err-crop-name', 'err-ship-date', 'err-quantity', 'err-destination'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+        }
+
+        btnCancelEdit.addEventListener('click', resetForm);
+
+        // ==========================================
+        // 6. 削除 & 編集操作
+        // ==========================================
+        window.handleEdit = function(id) {
+            const item = allShipments.find(s => s.id === id);
+            if (!item) return;
+
+            document.getElementById('crop-name').value = item.cropName || '';
+            document.getElementById('ship-date').value = item.shipDate || '';
+            document.getElementById('quantity').value = item.quantity || '';
+            document.getElementById('unit').value = item.unit || 'kg';
+            document.getElementById('destination').value = item.destination || '';
+            document.getElementById('memo').value = item.memo || '';
+            
+            editDocIdInput.value = id;
+            formTitle.innerHTML = '<i class="fa-solid fa-pen-to-square text-amber-500"></i><span>出荷記録の編集</span>';
+            btnSubmitText.textContent = '更新保存する';
+            btnCancelEdit.classList.remove('hidden');
+
+            // フォームへスクロール
+            shipmentForm.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.handleDelete = async function(id) {
+            if (!confirm('この出荷記録を削除してもよろしいですか？')) return;
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'shipapp-default';
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shipments', id);
+                await deleteDoc(docRef);
+                showToast('記録を削除しました', 'info');
+            } catch (error) {
+                console.error("Delete Error:", error);
+                showToast('削除に失敗しました', 'error');
+            }
+        };
+
+        // ==========================================
+        // 7. フィルター・並び替え・一覧表示レンダリング
+        // ==========================================
+
+        // プルダウンの選択肢を動的に生成
+        function updateFilterOptions() {
+            const currentCrop = filterCrop.value;
+            const currentDest = filterDest.value;
+
+            const crops = [...new Set(allShipments.map(s => s.cropName).filter(Boolean))].sort();
+            const dests = [...new Set(allShipments.map(s => s.destination).filter(Boolean))].sort();
+
+            filterCrop.innerHTML = '<option value="">すべての農産物</option>' + 
+                crops.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+            filterDest.innerHTML = '<option value="">すべての出荷先</option>' + 
+                dests.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+
+            filterCrop.value = crops.includes(currentCrop) ? currentCrop : '';
+            filterDest.value = dests.includes(currentDest) ? currentDest : '';
+        }
+
+        // イベントリスナー設定
+        [searchKeyword, filterCrop, filterDest, sortOrder].forEach(el => {
+            el.addEventListener('input', renderData);
+            el.addEventListener('change', renderData);
+        });
+
+        btnResetFilter.addEventListener('click', () => {
+            searchKeyword.value = '';
+            filterCrop.value = '';
+            filterDest.value = '';
+            sortOrder.value = 'date-desc';
+            renderData();
+        });
+
+        // データ描画メイン処理
+        function renderData() {
+            const kw = searchKeyword.value.toLowerCase().trim();
+            const cropF = filterCrop.value;
+            const destF = filterDest.value;
+            const sort = sortOrder.value;
+
+            // フィルター解除ボタンの表示切替
+            if (kw || cropF || destF || sort !== 'date-desc') {
+                btnResetFilter.classList.remove('hidden');
+            } else {
+                btnResetFilter.classList.add('hidden');
+            }
+
+            // 1. 絞り込み (RULE 2 準拠: メモリ内処理)
+            let filtered = allShipments.filter(item => {
+                const matchKw = !kw || 
+                    (item.cropName && item.cropName.toLowerCase().includes(kw)) ||
+                    (item.destination && item.destination.toLowerCase().includes(kw)) ||
+                    (item.memo && item.memo.toLowerCase().includes(kw));
+
+                const matchCrop = !cropF || item.cropName === cropF;
+                const matchDest = !destF || item.destination === destF;
+
+                return matchKw && matchCrop && matchDest;
+            });
+
+            // 2. 並び替え
+            filtered.sort((a, b) => {
+                if (sort === 'date-desc') return new Date(b.shipDate || 0) - new Date(a.shipDate || 0);
+                if (sort === 'date-asc') return new Date(a.shipDate || 0) - new Date(b.shipDate || 0);
+                if (sort === 'qty-desc') return (b.quantity || 0) - (a.quantity || 0);
+                if (sort === 'qty-asc') return (a.quantity || 0) - (b.quantity || 0);
+                return 0;
+            });
+
+            totalCountSpan.textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = '';
+                mobileCardList.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // 3. PC用テーブル行生成
+            tableBody.innerHTML = filtered.map(item => `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">
+                        ${escapeHtml(item.shipDate || '-')}
+                    </td>
+                    <td class="py-3 px-4 font-bold text-emerald-800">
+                        ${escapeHtml(item.cropName || '-')}
+                    </td>
+                    <td class="py-3 px-4 text-right font-semibold text-slate-800 whitespace-nowrap">
+                        ${item.quantity ?? 0} <span class="text-xs text-slate-500 font-normal">${escapeHtml(item.unit || 'kg')}</span>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full border border-slate-200">
+                            ${escapeHtml(item.destination || '-')}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-xs text-slate-600 max-w-xs truncate" title="${escapeHtml(item.memo || '')}">
+                        ${escapeHtml(item.memo || '-')}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="handleEdit('${item.id}')" title="編集" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="handleDelete('${item.id}')" title="削除" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            // 4. スマホ用カード表示生成
+            mobileCardList.innerHTML = filtered.map(item => `
+                <div class="p-4 space-y-2">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs text-slate-400 font-medium">${escapeHtml(item.shipDate || '-')}</span>
+                            <h4 class="font-bold text-emerald-800 text-base">${escapeHtml(item.cropName || '-')}</h4>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold text-slate-800">
+                                ${item.quantity ?? 0} <span class="text-xs text-slate-500 font-normal">${escapeHtml(item.unit || 'kg')}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs pt-1">
+                        <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                            <i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${escapeHtml(item.destination || '-')}
+                        </span>
+                        
+                        <div class="flex gap-2">
+                            <button onclick="handleEdit('${item.id}')" class="text-amber-600 hover:underline px-2 py-1 bg-amber-50 rounded">
+                                <i class="fa-solid fa-pen mr-1"></i>編集
+                            </button>
+                            <button onclick="handleDelete('${item.id}')" class="text-red-600 hover:underline px-2 py-1 bg-red-50 rounded">
+                                <i class="fa-solid fa-trash mr-1"></i>削除
+                            </button>
+                        </div>
+                    </div>
+
+                    ${item.memo ? `<p class="text-xs text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 mt-2">${escapeHtml(item.memo)}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // ==========================================
+        // 8. 集計 & Chart.js グラフ生成 (発展機能)
+        // ==========================================
+        function renderAnalytics() {
+            // 総件数
+            document.getElementById('summary-total-records').textContent = `${allShipments.length} 回`;
+
+            // 品目数
+            const cropTypes = new Set(allShipments.map(s => s.cropName).filter(Boolean));
+            document.getElementById('summary-crop-types').textContent = `${cropTypes.size} 品目`;
+
+            // kg表記合計
+            const totalKg = allShipments
+                .filter(s => !s.unit || s.unit === 'kg')
+                .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+            document.getElementById('summary-total-kg').textContent = `${totalKg.toFixed(1)} kg`;
+
+            // 1. 農産物ごとの合計集計表
+            const cropTotals = {};
+            allShipments.forEach(s => {
+                const name = s.cropName || '未分類';
+                const qty = Number(s.quantity) || 0;
+                const unit = s.unit || 'kg';
+
+                if (!cropTotals[name]) {
+                    cropTotals[name] = { count: 0, units: {} };
+                }
+                cropTotals[name].count += 1;
+                cropTotals[name].units[unit] = (cropTotals[name].units[unit] || 0) + qty;
+            });
+
+            const aggTbody = document.getElementById('aggregate-table-body');
+            const cropNames = Object.keys(cropTotals);
+
+            if (cropNames.length === 0) {
+                aggTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">集計データがありません</td></tr>';
+            } else {
+                aggTbody.innerHTML = cropNames.map(name => {
+                    const info = cropTotals[name];
+                    const unitStr = Object.entries(info.units)
+                        .map(([u, val]) => `${val.toFixed(1)}${u}`)
+                        .join(' / ');
+
+                    return `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-2.5 font-bold text-slate-800">${escapeHtml(name)}</td>
+                            <td class="p-2.5 text-right font-semibold text-emerald-700">${unitStr}</td>
+                            <td class="p-2.5 text-right text-slate-500">${info.count} 回</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // 2. 日別推移グラフ (Chart.js)
+            const dateMap = {};
+            // 日付でソート
+            const sortedByDate = [...allShipments].sort((a, b) => new Date(a.shipDate || 0) - new Date(b.shipDate || 0));
+
+            sortedByDate.forEach(s => {
+                if (!s.shipDate) return;
+                const date = s.shipDate;
+                dateMap[date] = (dateMap[date] || 0) + (Number(s.quantity) || 0);
+            });
+
+            const labels = Object.keys(dateMap);
+            const dataValues = Object.values(dateMap);
+
+            const ctx = document.getElementById('chart-trend').getContext('2d');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '日別出荷数量合計',
+                        data: dataValues,
+                        borderColor: '#16a34a',
+                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointBackgroundColor: '#15803d',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ==========================================
+        // 9. タブ切り替え制御
+        // ==========================================
+        tabBtnRecord.addEventListener('click', () => {
+            tabBtnRecord.classList.add('tab-active');
+            tabBtnAnalytics.classList.remove('tab-active');
+            tabBtnAnalytics.classList.add('text-slate-500');
+            tabContentRecord.classList.remove('hidden');
+            tabContentAnalytics.classList.add('hidden');
+        });
+
+        tabBtnAnalytics.addEventListener('click', () => {
+            tabBtnAnalytics.classList.add('tab-active');
+            tabBtnRecord.classList.remove('tab-active');
+            tabBtnRecord.classList.add('text-slate-500');
+            tabContentAnalytics.classList.remove('hidden');
+            tabContentRecord.classList.add('hidden');
+            renderAnalytics(); // グラフ再レンダリング
+        });
+
+        // ==========================================
+        // ユーティリティ (トースト通知 & HTMLエスケープ)
+        // ==========================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const bgClass = type === 'success' ? 'bg-emerald-800' : type === 'error' ? 'bg-red-800' : 'bg-slate-800';
+            const icon = type === 'success' ? 'fa-circle-check' : type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info';
+
+            toast.className = `${bgClass} text-white text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+
+            // アニメーション表示
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            // 3秒後消去
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return str;
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
